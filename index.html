@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trainer Follow-up Helper</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a7d4f">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📲%3C/text%3E%3C/svg%3E">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f6f8;--card:#fff;--tx:#1b1f24;--mu:#667085;--bd:#e3e6ea;--pri:#0a7d4f;--prit:#fff;--warn:#b54708;--warnbg:#fef0c7;--bad:#b42318;--badbg:#fee4e2;--info:#175cd3;--infobg:#d1e9ff;--ok:#067647;--okbg:#d1fadf}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--card:#1a1f26;--tx:#eef0f3;--mu:#9aa4b2;--bd:#2c333d;--pri:#2ec27e;--prit:#06241a;--warn:#fdb022;--warnbg:#3b2a0a;--bad:#fda29b;--badbg:#3d1512;--info:#84caff;--infobg:#102a4c;--ok:#75e0a7;--okbg:#0c2f1d}}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0 0 2px}h2{font-size:16px;margin:0 0 8px}
+.sub{color:var(--mu);margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{background:var(--pri);color:var(--prit);border:0;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.sec{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.btn.sm{padding:6px 10px;font-size:13px}
+input[type=text],input[type=search],select,textarea{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;width:100%}
+textarea{min-height:110px;resize:vertical}
+.drop{border:2px dashed var(--bd);border-radius:14px;padding:18px;text-align:center;color:var(--mu)}
+.drop.on{border-color:var(--pri)}
+.files{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;justify-content:center}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:160px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:22px}.stat span{color:var(--mu);font-size:13px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.tab{border:1px solid var(--bd);background:transparent;border-radius:999px;padding:5px 12px;cursor:pointer}
+.tab.on{background:var(--pri);color:var(--prit);border-color:var(--pri)}
+.chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12.5px;margin:2px 4px 2px 0}
+.c-course{background:var(--infobg);color:var(--info)}.c-crm{background:var(--warnbg);color:var(--warn)}.c-nps{background:var(--badbg);color:var(--bad)}.c-ok{background:var(--okbg);color:var(--ok)}
+.p{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.p .nm{font-weight:650}.p .mt{color:var(--mu);font-size:13px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.p.done{opacity:.6}
+.tbl{overflow-x:auto}
+.hint{color:var(--mu);font-size:13px}
+.empty{text-align:center;color:var(--mu);padding:24px}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📲 Trainer Follow-up Helper</h1>
+  <p class="sub">Upload your pending reports, pick your name, and message everyone who still has work pending.</p>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <b>Drop your Excel files here</b> or <label style="text-decoration:underline;cursor:pointer">choose files<input id="file" type="file" accept=".xlsx,.xls,.csv" multiple hidden></label>
+      <div class="hint">Course Pending · CRM Usage · NPS Follow-up. Any one, two or all three. The app detects each file itself.</div>
+      <div class="files" id="files"></div>
+    </div>
+    <p class="hint" style="margin:10px 0 0">🔒 Files are read inside your browser only and are never uploaded anywhere. <button class="btn sec sm" id="demo">Try with sample data</button></p>
+  </div>
+
+  <div id="main" hidden>
+    <div class="card">
+      <div class="row">
+        <div class="grow"><label class="hint">Trainer</label><select id="trainer"></select></div>
+        <div class="grow"><label class="hint">Search</label><input type="search" id="q" placeholder="Name, store or phone"></div>
+        <div class="grow"><label class="hint">Deadline to complete</label><input type="date" id="due"></div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <label class="hint"><input type="checkbox" id="hideRecent"> Hide people I already messaged in the last 2 days</label>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn" id="next">▶ Message next person on WhatsApp</button>
+      <button class="btn sec" id="csv">Download this list (CSV)</button>
+      <button class="btn sec" id="bulk">⬇ Bulk-send file (Excel)</button>
+    </div>
+    <p class="hint" style="margin-top:0">WhatsApp opens with the message ready. You only press send. When you come back, the person is marked as messaged.</p>
+
+    <div id="list"></div>
+
+    <div class="card">
+      <details>
+        <summary>✏️ Edit the message template</summary>
+        <p class="hint">Use <code>{name}</code>, <code>{issues}</code> and <code>{trainer}</code>. They are filled in for each person.</p>
+        <textarea id="tpl"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn sec sm" id="tplReset">Reset to default</button></div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const DEFAULT_TPL="Hi {name}, this is {trainer} from the Oppo Kerala training team. A few things are still pending for you:\n{issues}\nPlease complete them today and let me know once done. Thank you!";
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let people={},sources={},tab='all',contacted=store.get('fu_contacted',{}),pendingOpen=null;
+
+const idOf=s=>{const m=String(s||'').match(/(\d{6,})\s*$/);return m?m[1]:String(s||'').toLowerCase().replace(/\s+/g,'')};
+const clean=s=>String(s||'').replace(/\s*-?\d{6,}\s*$/,'').replace(/\s+/g,' ').trim();
+const locOf=t=>{const m=String(t||'').match(/-RT-([A-Z]{3})-/);return m?m[1]:''};
+const short=t=>clean(String(t||'').replace(/-RT-.*$/,'')).trim();
+const phoneOf=p=>{const d=String(p||'').replace(/\D/g,'');return d.length>=10?d.slice(-10):''};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const P=(id,name)=>people[id]||(people[id]={id,name:clean(name),phone:'',store:'',loc:'',trainer:'',courses:[],crm:[],nps:null,active:true});
+const norm=r=>{const o={};for(const k in r)o[String(k).trim().toLowerCase()]=typeof r[k]==='string'?r[k].trim():r[k];return o};
+
+function parseRows(rows,fname){
+  rows=rows.map(norm);if(!rows.length)return null;
+  const h=Object.keys(rows[0]);
+  if(h.includes('total course pending')){
+    const skip=['employee\'s name','mob no','store','duties','superior','entry date','zone','location','active status','trainer name','total course pending'];
+    const cols=h.filter(c=>!skip.includes(c));
+    rows.forEach(r=>{if(!r["employee's name"])return;const p=P(idOf(r["employee's name"]),r["employee's name"]);
+      p.phone=phoneOf(r['mob no'])||p.phone;p.store=r.store||p.store;p.loc=r.location||p.loc;p.trainer=r['trainer name']||p.trainer;
+      p.active=!/resign|left|inactive/i.test(r['active status']||'');
+      p.courses=cols.filter(c=>/^(not started|learning|in progress)$/i.test(String(r[c]).trim())).map(c=>c.replace(/_OI$/,'').replace(/_/g,' '));});
+    return 'Course Pending';}
+  if(h.includes('quick knowledge-in')||(h.includes('incentive')&&h.includes('emi offers'))){
+    const cols=[['incentive','Incentive'],['quick knowledge-in','Quick Knowledge'],['emi offers','EMI Offers']].filter(c=>h.includes(c[0]));
+    rows.forEach(r=>{if(!r["employee's name"])return;const p=P(idOf(r["employee's name"]),r["employee's name"]);
+      p.store=p.store||r.store||'';p.loc=p.loc||r.region||'';p.trainer=r['trainer name']||p.trainer;
+      p.crm=cols.filter(c=>/not using/i.test(r[c[0]]||'')).map(c=>c[1]);});
+    return 'CRM Usage';}
+  if(h.includes('nsp follow up')||h.includes('oec name')){
+    rows.forEach(r=>{if(!r['oec name'])return;const p=P(idOf(r['oec name']),r['oec name']);
+      p.store=p.store||r['wod name']||'';p.loc=p.loc||r.location||'';
+      const fu=String(r['nsp follow up']||'').toLowerCase(),rc=String(r['nps reseaved']||'').toLowerCase();
+      if(fu!=='yes'||rc==='no')p.nps={fu:fu==='yes',rc:rc!=='no'};});
+    return 'NPS Follow-up';}
+  return null;
+}
+async function readFile(f){
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+  let best=null;
+  for(const n of wb.SheetNames){const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});if(!rows.length)continue;
+    const probe=Object.keys(rows[0]).map(k=>k.trim().toLowerCase());
+    if(probe.includes('total course pending')||probe.includes('quick knowledge-in')||probe.includes('oec name')||probe.includes('nsp follow up')){best=rows;break}}
+  const kind=best&&parseRows(best,f.name);
+  return {name:f.name,kind};
+}
+async function load(list){
+  const out=[];
+  for(const f of list){try{out.push(await readFile(f))}catch(e){out.push({name:f.name,kind:null})}}
+  $('files').innerHTML=out.map(o=>`<span class="chip ${o.kind?'c-ok':'c-nps'}">${o.kind?'✓ '+o.kind:'✕ not recognised'}: ${esc(o.name)}</span>`).join('');
+  out.forEach(o=>{if(o.kind)sources[o.kind]=1});
+  start();
+}
+function tpl(){return $('tpl').value||DEFAULT_TPL}
+function trainers(){const s={};Object.values(people).forEach(p=>{if(p.trainer)s[p.trainer]=1});return Object.keys(s).sort()}
+function start(){
+  const ts=trainers();const saved=store.get('fu_trainer','');
+  $('trainer').innerHTML='<option value="">All trainers</option>'+ts.map(t=>`<option value="${esc(t)}">${esc(short(t))} (${esc(locOf(t))})</option>`).join('');
+  $('trainer').value=ts.includes(saved)?saved:'';
+  $('main').hidden=false;render();
+}
+function mine(){
+  const t=$('trainer').value;
+  return Object.values(people).filter(p=>p.active&&(p.courses.length||p.crm.length||p.nps)).filter(p=>{
+    if(!t)return true;if(p.trainer)return p.trainer===t;
+    return p.loc&&p.loc===locOf(t);});
+}
+function issues(p){
+  const a=[];
+  if(p.courses.length)a.push('• Course pending: '+p.courses.join(', '));
+  if(p.crm.length)a.push('• CRM not being used: '+p.crm.join(', '));
+  if(p.nps)a.push('• NPS follow-up pending'+(p.nps.fu?' (NPS not yet received)':''));
+  return a.join('\n');
+}
+function dleft(){const v=$('due').value;if(!v)return null;return Math.round((new Date(v+'T00:00:00')-new Date(new Date().toDateString()))/864e5)}
+function toneLabel(){const d=dleft();return d===null?'Normal':d<0?'Overdue':d===0?'Urgent':d===1?'ASAP':d<=3?'Reminder':'Friendly'}
+function urgency(){const d=dleft(),v=$('due').value;if(d===null)return '';const dt=new Date(v+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  if(d<0)return '\uD83D\uDEA8 OVERDUE by '+(-d)+' day'+(d<-1?'s':'')+' (deadline was '+dt+'). Please complete this immediately.';
+  if(d===0)return '\uD83D\uDEA8 URGENT: today ('+dt+') is the last date. Please complete this right now.';
+  if(d===1)return '\u26A0\uFE0F Deadline is tomorrow ('+dt+'). Please finish this ASAP today.';
+  if(d<=3)return '\u23F0 Reminder: only '+d+' days left (deadline '+dt+'). Please complete it soon.';
+  return '\uD83D\uDCC5 Friendly reminder: deadline is '+dt+'.';}
+function msg(p){
+  const t=$('trainer').value||p.trainer;
+  const T=tpl(),u=urgency();
+  let r=T.replace(/\{urgency\}/g,u).replace(/\{name\}/g,p.name.split(' ')[0]).replace(/\{issues\}/g,issues(p)).replace(/\{trainer\}/g,short(t)||'your trainer');
+  if(u&&!T.includes('{urgency}'))r=r.replace(/\n/,'\n'+u+'\n');
+  return r;
+}
+function days(p){const d=contacted[p.id];return d?Math.floor((Date.now()-d)/864e5):null}
+function visible(){
+  const q=$('q').value.toLowerCase(),hide=$('hideRecent').checked;
+  return mine().filter(p=>tab==='all'||(tab==='course'&&p.courses.length)||(tab==='crm'&&p.crm.length)||(tab==='nps'&&p.nps))
+   .filter(p=>!q||(p.name+p.store+p.phone).toLowerCase().includes(q))
+   .filter(p=>!(hide&&days(p)!==null&&days(p)<2))
+   .sort((a,b)=>(days(a)===null?-1:0)-(days(b)===null?-1:0)||(b.courses.length+b.crm.length)-(a.courses.length+a.crm.length));
+}
+function render(){
+  const m=mine();
+  const cnt=k=>m.filter(p=>k==='course'?p.courses.length:k==='crm'?p.crm.length:k==='nps'?p.nps:1).length;
+  $('stats').innerHTML=[['People to follow up',m.length],['Course pending',cnt('course')],['CRM not using',cnt('crm')],['NPS pending',cnt('nps')],['Not messaged yet',m.filter(p=>days(p)===null).length],['Message tone',toneLabel()]].map(s=>`<div class="stat"><b>${s[1]}</b><span>${s[0]}</span></div>`).join('');
+  $('tabs').innerHTML=[['all','All'],['course','Courses'],['crm','CRM usage'],['nps','NPS']].map(t=>`<button class="tab ${tab===t[0]?'on':''}" data-t="${t[0]}">${t[1]}</button>`).join('');
+  const v=visible();
+  $('list').innerHTML=v.length?v.map(p=>{
+    const d=days(p);
+    const chips=p.courses.map(c=>`<span class="chip c-course">📘 ${esc(c)}</span>`).join('')+p.crm.map(c=>`<span class="chip c-crm">🖥 ${esc(c)}</span>`).join('')+(p.nps?`<span class="chip c-nps">⭐ NPS follow-up</span>`:'');
+    const wa=p.phone?`<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/91${p.phone}?text=${encodeURIComponent(msg(p))}" data-wa="${p.id}">WhatsApp</a><button class="btn sec sm" data-cp="${p.id}">Copy message</button><button class="btn sec sm" data-cl="${p.id}">Copy link</button><a class="btn sec sm" href="tel:+91${p.phone}">Call</a>`:`<span class="hint">No phone number in your files (upload the Course Pending file)</span>`;
+    return `<div class="card p ${d!==null&&d<2?'done':''}"><div style="flex:1;min-width:220px"><div class="nm">${esc(p.name)}</div><div class="mt">${esc(p.store||'')}${p.phone?' · '+p.phone:''}</div><div>${chips}</div>${d!==null?`<span class="chip c-ok">Messaged ${d===0?'today':d+' day'+(d>1?'s':'')+' ago'}</span>`:''}</div><div class="acts">${wa}${d!==null?`<button class="btn sec sm" data-un="${p.id}">Undo</button>`:''}</div></div>`}).join(''):'<div class="card empty">Nobody to show. Try another trainer or tab, or upload the latest files.</div>';
+}
+function openWA(id){
+  const a=document.querySelector('a[data-wa="'+id+'"]');if(a){pendingOpen=id;a.click()}
+}
+function copy(t,btn){
+  const done=()=>{const o=btn.textContent;btn.textContent='Copied ✓';setTimeout(()=>btn.textContent=o,1200)};
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(done,()=>prompt('Copy this:',t));else prompt('Copy this:',t);
+}
+function markBack(){
+  if(pendingOpen){contacted[pendingOpen]=Date.now();store.set('fu_contacted',contacted);pendingOpen=null;render()}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)markBack()});
+window.addEventListener('focus',markBack);
+
+$('file').onchange=e=>load([...e.target.files]);
+const dz=$('drop');
+dz.ondragover=e=>{e.preventDefault();dz.classList.add('on')};dz.ondragleave=()=>dz.classList.remove('on');
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('on');load([...e.dataTransfer.files])};
+$('trainer').onchange=()=>{store.set('fu_trainer',$('trainer').value);render()};
+$('q').oninput=render;$('hideRecent').onchange=render;
+$('due').value=store.get('fu_due','');$('due').onchange=()=>{store.set('fu_due',$('due').value);render()};
+$('tabs').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
+$('list').onclick=e=>{
+  if(e.target.dataset.wa)pendingOpen=e.target.dataset.wa;
+  if(e.target.dataset.cp)copy(msg(people[e.target.dataset.cp]),e.target);
+  if(e.target.dataset.cl){const p=people[e.target.dataset.cl];copy('https://wa.me/91'+p.phone+'?text='+encodeURIComponent(msg(p)),e.target)}
+  if(e.target.dataset.un){delete contacted[e.target.dataset.un];store.set('fu_contacted',contacted);render()}
+};
+$('next').onclick=()=>{const n=visible().find(p=>p.phone&&days(p)===null);if(n)openWA(n.id);else alert('Everyone in this list has been messaged. 🎉')};
+$('tpl').value=store.get('fu_tpl',DEFAULT_TPL);
+$('tpl').oninput=()=>store.set('fu_tpl',$('tpl').value);
+$('tplReset').onclick=()=>{$('tpl').value=DEFAULT_TPL;store.set('fu_tpl',DEFAULT_TPL)};
+$('csv').onclick=()=>{
+  const rows=[['Name','Phone','Store','Course pending','CRM not using','NPS pending','Last messaged']].concat(visible().map(p=>[p.name,p.phone,p.store,p.courses.join('; '),p.crm.join('; '),p.nps?'Yes':'',days(p)===null?'':days(p)+' days ago']));
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='follow-up-list.csv';a.click();
+};
+$('bulk').onclick=()=>{
+  const rows=visible().filter(p=>p.phone).map(p=>({Name:p.name,Phone:'91'+p.phone,Message:msg(p),'Course pending':p.courses.join('; '),'CRM not using':p.crm.join('; '),'NPS pending':p.nps?'Yes':''}));
+  if(!rows.length){alert('No people with phone numbers in this list. Upload the Course Pending file too.');return}
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Follow-up');
+  XLSX.writeFile(wb,'bulk-followup-'+new Date().toISOString().slice(0,10)+'.xlsx');
+};
+$('demo').onclick=()=>{
+  people={};const T='Demo Trainer-RT-CLT-50000001';
+  const names=['Anu Raj','Basil Joseph','Chandni S','Dilshad K','Ebin Thomas','Fahad M','Gopika R','Hari K','Irfan P','Jisha V'];
+  const cs=['Find X10 KSP Videos','ColorOS 17 Overview','Find X10 Image Content'],cr=['Incentive','Quick Knowledge','EMI Offers'];
+  names.forEach((n,i)=>{const p=P('9000'+i+'0000',n);p.phone='98765432'+(10+i);p.store='Demo Store '+(i+1)+'-CLT';p.loc='CLT';p.trainer=T;
+    p.courses=cs.slice(0,i%4);p.crm=i%3===0?[cr[i%3],cr[(i+1)%3]]:(i%2?[cr[2]]:[]);p.nps=i%4===1?{fu:false,rc:false}:null;});
+  $('files').innerHTML='<span class="chip c-ok">Showing fake sample data</span>';start();
+};
+})();
+</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
+</body>
+</html>
