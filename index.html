@@ -47,6 +47,8 @@ textarea{min-height:110px;resize:vertical}
 .hint{color:var(--mu);font-size:13px}
 .empty{text-align:center;color:var(--mu);padding:24px}
 details summary{cursor:pointer;font-weight:600}
+input[type=number],input[type=password]{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;width:100%}
+#owaLog{margin:10px 0 0;max-height:220px;overflow:auto}
 </style>
 </head>
 <body>
@@ -82,6 +84,29 @@ details summary{cursor:pointer;font-weight:600}
       <button class="btn sec" id="bulk">⬇ Bulk-send file (Excel)</button>
     </div>
     <p class="hint" style="margin-top:0">WhatsApp opens with the message ready. You only press send. When you come back, the person is marked as messaged.</p>
+
+    <div class="card">
+      <details>
+        <summary>🤖 Auto-send with OpenWA (advanced)</summary>
+        <p class="hint">Works only in the version hosted on GitHub Pages, with OpenWA running on the same computer (Docker). Your key is saved in this browser only.</p>
+        <div class="row">
+          <div class="grow"><label class="hint">OpenWA address</label><input type="text" id="owaUrl" placeholder="http://localhost:2785"></div>
+          <div class="grow"><label class="hint">API key</label><input type="password" id="owaKey" autocomplete="off"></div>
+          <div class="grow"><label class="hint">Session ID</label><input type="text" id="owaSid"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div class="grow"><label class="hint">Seconds between messages</label><input type="number" id="owaDelay" min="10" value="30"></div>
+          <div class="grow"><label class="hint">Max messages per day</label><input type="number" id="owaCap" min="1" value="40"></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sec sm" id="owaTest">Test connection</button>
+          <button class="btn" id="owaSend">🚀 Send to all pending now</button>
+          <button class="btn sec sm" id="owaStop" hidden>Stop</button>
+        </div>
+        <p class="hint" style="margin-bottom:0">Sends only to the people currently shown in the list (use the Trainer, tab and search filters first). People you messaged in the last 2 days are skipped.</p>
+        <pre id="owaLog" class="hint" style="white-space:pre-wrap"></pre>
+      </details>
+    </div>
 
     <div id="list"></div>
 
@@ -245,6 +270,39 @@ $('csv').onclick=()=>{
   const rows=[['Name','Phone','Store','Course pending','CRM not using','NPS pending','Last messaged']].concat(visible().map(p=>[p.name,p.phone,p.store,p.courses.join('; '),p.crm.join('; '),p.nps?'Yes':'',days(p)===null?'':days(p)+' days ago']));
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='follow-up-list.csv';a.click();
+};
+const O=()=>({url:($('owaUrl').value||'http://localhost:2785').trim().replace(/\/+$/,''),key:$('owaKey').value.trim(),sid:$('owaSid').value.trim(),delay:Math.max(10,+$('owaDelay').value||30),cap:Math.max(1,+$('owaCap').value||40)});
+['owaUrl','owaKey','owaSid','owaDelay','owaCap'].forEach(id=>{const v=store.get('fu_'+id,null);if(v!==null)$(id).value=v;$(id).oninput=()=>store.set('fu_'+id,$(id).value)});
+const log=t=>{$('owaLog').textContent+=t+'\n'};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let stop=false;
+$('owaTest').onclick=async()=>{
+  const c=O();$('owaLog').textContent='';
+  if(!c.key||!c.sid){log('Fill in the API key and Session ID first.');return}
+  try{const r=await fetch(c.url+'/api/sessions/'+encodeURIComponent(c.sid),{headers:{'X-API-Key':c.key}});log('HTTP '+r.status+' '+(await r.text()).slice(0,300))}
+  catch(e){log('Could not reach OpenWA ('+e.message+'). Check that Docker is running, the address is right, and that OpenWA allows this website (CORS).')}
+};
+$('owaStop').onclick=()=>{stop=true};
+$('owaSend').onclick=async()=>{
+  const c=O();$('owaLog').textContent='';
+  if(!c.key||!c.sid){log('Fill in the API key and Session ID first.');return}
+  const sent=store.get('fu_sent',{d:'',n:0}),today=new Date().toDateString();if(sent.d!==today){sent.d=today;sent.n=0}
+  const room=c.cap-sent.n;
+  const todo=visible().filter(p=>p.phone&&(days(p)===null||days(p)>=2)).slice(0,Math.max(0,room));
+  if(!todo.length){log(room<=0?'Daily limit reached. Try again tomorrow.':'Nobody to send to.');return}
+  if(!confirm('Send '+todo.length+' WhatsApp messages from your linked number, about '+c.delay+' seconds apart? This takes about '+Math.ceil(todo.length*c.delay/60)+' minutes. Keep this page open.'))return;
+  stop=false;$('owaStop').hidden=false;$('owaSend').disabled=true;let ok=0,fail=0,consec=0;
+  for(let i=0;i<todo.length&&!stop;i++){
+    const p=todo[i];
+    try{
+      const r=await fetch(c.url+'/api/sessions/'+encodeURIComponent(c.sid)+'/messages/send-text',{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':c.key},body:JSON.stringify({chatId:'91'+p.phone+'@c.us',text:msg(p)})});
+      if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,120));
+      ok++;consec=0;contacted[p.id]=Date.now();store.set('fu_contacted',contacted);sent.n++;store.set('fu_sent',sent);log('✓ '+(i+1)+'/'+todo.length+' '+p.name);
+    }catch(e){fail++;consec++;log('✕ '+p.name+': '+e.message);if(consec>=3){log('Stopped: 3 failures in a row.');break}}
+    render();
+    if(i<todo.length-1&&!stop)await sleep(c.delay*1000*(0.7+Math.random()*0.6));
+  }
+  $('owaStop').hidden=true;$('owaSend').disabled=false;log('Done. Sent '+ok+', failed '+fail+(stop?' (stopped by you).':'.'));render();
 };
 $('bulk').onclick=()=>{
   const rows=visible().filter(p=>p.phone).map(p=>({Name:p.name,Phone:'91'+p.phone,Message:msg(p),'Course pending':p.courses.join('; '),'CRM not using':p.crm.join('; '),'NPS pending':p.nps?'Yes':''}));
