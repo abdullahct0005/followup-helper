@@ -73,7 +73,7 @@ input[type=number],input[type=password]{background:var(--card);border:1px solid 
         <div class="grow"><label class="hint">Deadline to complete</label><input type="date" id="due"></div>
       </div>
       <div class="tabs" id="tabs"></div>
-      <label class="hint"><input type="checkbox" id="hideRecent"> Hide people I already messaged in the last 2 days</label>
+      <label class="hint"><input type="checkbox" id="hideRecent"> Hide people already messaged since the last upload</label>
     </div>
 
     <div class="stats" id="stats"></div>
@@ -103,7 +103,8 @@ input[type=number],input[type=password]{background:var(--card);border:1px solid 
           <button class="btn" id="owaSend">🚀 Send to all pending now</button>
           <button class="btn sec sm" id="owaStop" hidden>Stop</button>
         </div>
-        <p class="hint" style="margin-bottom:0">Sends only to the people currently shown in the list (use the Trainer, tab and search filters first). People you messaged in the last 2 days are skipped.</p>
+        <p class="hint" style="margin-bottom:0">Sends only to the people currently shown in the list (use the Trainer, tab and search filters first). Each time you upload a changed file, everyone still pending is messaged again. People already messaged since that upload are skipped, so pressing the button twice does not send duplicates.</p>
+        <label class="hint"><input type="checkbox" id="owaAgain"> Also resend to people already messaged since the last upload</label>
         <pre id="owaLog" class="hint" style="white-space:pre-wrap"></pre>
       </details>
     </div>
@@ -127,7 +128,7 @@ input[type=number],input[type=password]{background:var(--card);border:1px solid 
 const $=id=>document.getElementById(id);
 const DEFAULT_TPL="Hi {name}, this is {trainer} from the Oppo Kerala training team. A few things are still pending for you:\n{issues}\nPlease complete them today and let me know once done. Thank you!";
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-let people={},sources={},tab='all',contacted=store.get('fu_contacted',{}),pendingOpen=null;
+let people={},sources={},tab='all',contacted=store.get('fu_contacted',{}),pendingOpen=null,round=store.get('fu_round',0);
 
 const idOf=s=>{const m=String(s||'').match(/(\d{6,})\s*$/);return m?m[1]:String(s||'').toLowerCase().replace(/\s+/g,'')};
 const clean=s=>String(s||'').replace(/\s*-?\d{6,}\s*$/,'').replace(/\s+/g,' ').trim();
@@ -177,6 +178,8 @@ async function load(list){
   for(const f of list){try{out.push(await readFile(f))}catch(e){out.push({name:f.name,kind:null})}}
   $('files').innerHTML=out.map(o=>`<span class="chip ${o.kind?'c-ok':'c-nps'}">${o.kind?'✓ '+o.kind:'✕ not recognised'}: ${esc(o.name)}</span>`).join('');
   out.forEach(o=>{if(o.kind)sources[o.kind]=1});
+  const sig=Object.values(people).map(p=>p.id+':'+p.courses.join('|')+'/'+p.crm.join('|')+'/'+(p.nps?1:0)).sort().join(';');
+  if(sig!==store.get('fu_sig','')){round=Date.now();store.set('fu_round',round);store.set('fu_sig',sig)}
   start();
 }
 function tpl(){return $('tpl').value||DEFAULT_TPL}
@@ -216,24 +219,25 @@ function msg(p){
   return r;
 }
 function days(p){const d=contacted[p.id];return d?Math.floor((Date.now()-d)/864e5):null}
+function inRound(p){return !!contacted[p.id]&&contacted[p.id]>=round}
 function visible(){
   const q=$('q').value.toLowerCase(),hide=$('hideRecent').checked;
   return mine().filter(p=>tab==='all'||(tab==='course'&&p.courses.length)||(tab==='crm'&&p.crm.length)||(tab==='nps'&&p.nps))
    .filter(p=>!q||(p.name+p.store+p.phone).toLowerCase().includes(q))
-   .filter(p=>!(hide&&days(p)!==null&&days(p)<2))
-   .sort((a,b)=>(days(a)===null?-1:0)-(days(b)===null?-1:0)||(b.courses.length+b.crm.length)-(a.courses.length+a.crm.length));
+   .filter(p=>!(hide&&inRound(p)))
+   .sort((a,b)=>(inRound(a)?1:0)-(inRound(b)?1:0)||(b.courses.length+b.crm.length)-(a.courses.length+a.crm.length));
 }
 function render(){
   const m=mine();
   const cnt=k=>m.filter(p=>k==='course'?p.courses.length:k==='crm'?p.crm.length:k==='nps'?p.nps:1).length;
-  $('stats').innerHTML=[['People to follow up',m.length],['Course pending',cnt('course')],['CRM not using',cnt('crm')],['NPS pending',cnt('nps')],['Not messaged yet',m.filter(p=>days(p)===null).length],['Message tone',toneLabel()]].map(s=>`<div class="stat"><b>${s[1]}</b><span>${s[0]}</span></div>`).join('');
+  $('stats').innerHTML=[['People to follow up',m.length],['Course pending',cnt('course')],['CRM not using',cnt('crm')],['NPS pending',cnt('nps')],['Not messaged since upload',m.filter(p=>!inRound(p)).length],['Message tone',toneLabel()]].map(s=>`<div class="stat"><b>${s[1]}</b><span>${s[0]}</span></div>`).join('');
   $('tabs').innerHTML=[['all','All'],['course','Courses'],['crm','CRM usage'],['nps','NPS']].map(t=>`<button class="tab ${tab===t[0]?'on':''}" data-t="${t[0]}">${t[1]}</button>`).join('');
   const v=visible();
   $('list').innerHTML=v.length?v.map(p=>{
     const d=days(p);
     const chips=p.courses.map(c=>`<span class="chip c-course">📘 ${esc(c)}</span>`).join('')+p.crm.map(c=>`<span class="chip c-crm">🖥 ${esc(c)}</span>`).join('')+(p.nps?`<span class="chip c-nps">⭐ NPS follow-up</span>`:'');
     const wa=p.phone?`<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/91${p.phone}?text=${encodeURIComponent(msg(p))}" data-wa="${p.id}">WhatsApp</a><button class="btn sec sm" data-cp="${p.id}">Copy message</button><button class="btn sec sm" data-cl="${p.id}">Copy link</button><a class="btn sec sm" href="tel:+91${p.phone}">Call</a>`:`<span class="hint">No phone number in your files (upload the Course Pending file)</span>`;
-    return `<div class="card p ${d!==null&&d<2?'done':''}"><div style="flex:1;min-width:220px"><div class="nm">${esc(p.name)}</div><div class="mt">${esc(p.store||'')}${p.phone?' · '+p.phone:''}</div><div>${chips}</div>${d!==null?`<span class="chip c-ok">Messaged ${d===0?'today':d+' day'+(d>1?'s':'')+' ago'}</span>`:''}</div><div class="acts">${wa}${d!==null?`<button class="btn sec sm" data-un="${p.id}">Undo</button>`:''}</div></div>`}).join(''):'<div class="card empty">Nobody to show. Try another trainer or tab, or upload the latest files.</div>';
+    return `<div class="card p ${inRound(p)?'done':''}"><div style="flex:1;min-width:220px"><div class="nm">${esc(p.name)}</div><div class="mt">${esc(p.store||'')}${p.phone?' · '+p.phone:''}</div><div>${chips}</div>${d!==null?`<span class="chip c-ok">Messaged ${d===0?'today':d+' day'+(d>1?'s':'')+' ago'}</span>`:''}</div><div class="acts">${wa}${d!==null?`<button class="btn sec sm" data-un="${p.id}">Undo</button>`:''}</div></div>`}).join(''):'<div class="card empty">Nobody to show. Try another trainer or tab, or upload the latest files.</div>';
 }
 function openWA(id){
   const a=document.querySelector('a[data-wa="'+id+'"]');if(a){pendingOpen=id;a.click()}
@@ -262,7 +266,7 @@ $('list').onclick=e=>{
   if(e.target.dataset.cl){const p=people[e.target.dataset.cl];copy('https://wa.me/91'+p.phone+'?text='+encodeURIComponent(msg(p)),e.target)}
   if(e.target.dataset.un){delete contacted[e.target.dataset.un];store.set('fu_contacted',contacted);render()}
 };
-$('next').onclick=()=>{const n=visible().find(p=>p.phone&&days(p)===null);if(n)openWA(n.id);else alert('Everyone in this list has been messaged. 🎉')};
+$('next').onclick=()=>{const n=visible().find(p=>p.phone&&!inRound(p));if(n)openWA(n.id);else alert('Everyone in this list has been messaged. 🎉')};
 $('tpl').value=store.get('fu_tpl',DEFAULT_TPL);
 $('tpl').oninput=()=>store.set('fu_tpl',$('tpl').value);
 $('tplReset').onclick=()=>{$('tpl').value=DEFAULT_TPL;store.set('fu_tpl',DEFAULT_TPL)};
@@ -288,7 +292,7 @@ $('owaSend').onclick=async()=>{
   if(!c.key||!c.sid){log('Fill in the API key and Session ID first.');return}
   const sent=store.get('fu_sent',{d:'',n:0}),today=new Date().toDateString();if(sent.d!==today){sent.d=today;sent.n=0}
   const room=c.cap-sent.n;
-  const todo=visible().filter(p=>p.phone&&(days(p)===null||days(p)>=2)).slice(0,Math.max(0,room));
+  const todo=visible().filter(p=>p.phone&&($('owaAgain').checked||!inRound(p))).slice(0,Math.max(0,room));
   if(!todo.length){log(room<=0?'Daily limit reached. Try again tomorrow.':'Nobody to send to.');return}
   if(!confirm('Send '+todo.length+' WhatsApp messages from your linked number, about '+c.delay+' seconds apart? This takes about '+Math.ceil(todo.length*c.delay/60)+' minutes. Keep this page open.'))return;
   stop=false;$('owaStop').hidden=false;$('owaSend').disabled=true;let ok=0,fail=0,consec=0;
