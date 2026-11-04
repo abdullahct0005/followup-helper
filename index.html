@@ -139,6 +139,24 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const P=(id,name)=>people[id]||(people[id]={id,name:clean(name),phone:'',store:'',loc:'',trainer:'',courses:[],crm:[],nps:null,active:true});
 const norm=r=>{const o={};for(const k in r)o[String(k).trim().toLowerCase()]=typeof r[k]==='string'?r[k].trim():r[k];return o};
 
+const prettyName=c=>String(c).replace(/_oi$/i,'').replace(/_/g,' ').replace(/\b[a-z]/g,m=>m.toUpperCase()).replace(/\bKsp\b/g,'KSP').replace(/\bColoros\b/g,'ColorOS').trim();
+function generic(rows){
+  const h=Object.keys(rows[0]);
+  const nameK=h.find(k=>/employee|oec|promoter|staff|name/.test(k)&&rows.slice(0,30).some(r=>/\d{6,}\s*$/.test(String(r[k]))));
+  if(!nameK)return null;
+  const phoneK=h.find(k=>/mob|phone|contact|whatsapp/.test(k)),trK=h.find(k=>/trainer/.test(k)),stK=h.find(k=>/store|outlet|wod|shop/.test(k)),locK=h.find(k=>/^(location|region)$/.test(k));
+  const PEND=/^(not started|learning|in progress|pending|not completed|incomplete|not done|overdue|not using|to do|yet to start)$/i;
+  const rest=h.filter(k=>![nameK,phoneK,trK,stK,locK].includes(k)&&!/superior|duties|entry date|zone|active|designation|role|mail/.test(k));
+  const cols=rest.filter(k=>rows.some(r=>PEND.test(String(r[k]).trim())));
+  if(!cols.length)return null;
+  const names=cols.map(prettyName);
+  Object.values(people).forEach(p=>{p.courses=p.courses.filter(x=>!names.includes(x));p.crm=p.crm.filter(x=>!names.includes(x))});
+  rows.forEach(r=>{if(!r[nameK])return;const p=P(idOf(r[nameK]),r[nameK]);
+    if(phoneK)p.phone=phoneOf(r[phoneK])||p.phone;
+    if(stK)p.store=r[stK]||p.store;if(locK)p.loc=r[locK]||p.loc;if(trK)p.trainer=r[trK]||p.trainer;
+    cols.forEach(k=>{const v=String(r[k]).trim();if(!PEND.test(v))return;const n=prettyName(k);const list=/not using/i.test(v)?p.crm:p.courses;if(!list.includes(n))list.push(n)});});
+  return 'Pending report';
+}
 function parseRows(rows,fname){
   rows=rows.map(norm);if(!rows.length)return null;
   const h=Object.keys(rows[0]);
@@ -165,21 +183,28 @@ function parseRows(rows,fname){
       const fu=String(r['nsp follow up']||'').toLowerCase(),rc=String(r['nps reseaved']||'').toLowerCase();
       if(fu!=='yes'||rc==='no')p.nps={fu:fu==='yes',rc:rc!=='no'};});
     return 'NPS Follow-up';}
-  return null;
+  return generic(rows);
 }
 async function readFile(f){
   const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
-  let best=null;
-  for(const n of wb.SheetNames){const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});if(!rows.length)continue;
-    const probe=Object.keys(rows[0]).map(k=>k.trim().toLowerCase());
-    if(probe.includes('total course pending')||probe.includes('quick knowledge-in')||probe.includes('oec name')||probe.includes('nsp follow up')){best=rows;break}}
-  const kind=best&&parseRows(best,f.name);
-  return {name:f.name,kind};
+  let cols='';
+  for(const n of wb.SheetNames){
+    const ws=wb.Sheets[n];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let hi=aoa.slice(0,20).findIndex(r=>r.filter(x=>String(x).trim()).length>=3&&r.some(x=>/name|employee|oec/i.test(String(x))));
+    if(hi<0)hi=0;
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:'',range:hi});
+    if(!rows.length)continue;
+    if(!cols)cols=Object.keys(rows[0]).slice(0,8).join(', ');
+    const kind=parseRows(rows,f.name);
+    if(kind)return {name:f.name,kind};
+  }
+  return {name:f.name,kind:null,cols};
 }
 async function load(list){
   const out=[];
   for(const f of list){try{out.push(await readFile(f))}catch(e){out.push({name:f.name,kind:null})}}
-  $('files').innerHTML=out.map(o=>`<span class="chip ${o.kind?'c-ok':'c-nps'}">${o.kind?'✓ '+o.kind:'✕ not recognised'}: ${esc(o.name)}</span>`).join('');
+  $('files').innerHTML=out.map(o=>`<span class="chip ${o.kind?'c-ok':'c-nps'}">${o.kind?'✓ '+o.kind:'✕ not recognised'}: ${esc(o.name)}${o.kind?'':(o.cols?' (columns found: '+esc(o.cols)+')':'')}</span>`).join('');
   out.forEach(o=>{if(o.kind)sources[o.kind]=1});
   const sig=Object.values(people).map(p=>p.id+':'+p.courses.join('|')+'/'+p.crm.join('|')+'/'+(p.nps?1:0)).sort().join(';');
   if(sig!==store.get('fu_sig','')){round=Date.now();store.set('fu_round',round);store.set('fu_sig',sig)}
