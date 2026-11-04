@@ -142,13 +142,16 @@ const norm=r=>{const o={};for(const k in r)o[String(k).trim().toLowerCase()]=typ
 function parseRows(rows,fname){
   rows=rows.map(norm);if(!rows.length)return null;
   const h=Object.keys(rows[0]);
-  if(h.includes('total course pending')){
+  if(h.includes('total course pending')||(h.includes("employee's name")&&h.includes('mob no')&&h.includes('trainer name'))){
     const skip=['employee\'s name','mob no','store','duties','superior','entry date','zone','location','active status','trainer name','total course pending'];
     const cols=h.filter(c=>!skip.includes(c));
+    const pretty=c=>c.replace(/_oi$/i,'').replace(/_/g,' ').replace(/\b[a-z]/g,m=>m.toUpperCase()).replace(/\bKsp\b/g,'KSP').replace(/\bColoros\b/g,'ColorOS').trim();
+    const names=cols.map(pretty);
+    Object.values(people).forEach(p=>{p.courses=p.courses.filter(x=>!names.includes(x))});
     rows.forEach(r=>{if(!r["employee's name"])return;const p=P(idOf(r["employee's name"]),r["employee's name"]);
       p.phone=phoneOf(r['mob no'])||p.phone;p.store=r.store||p.store;p.loc=r.location||p.loc;p.trainer=r['trainer name']||p.trainer;
       p.active=!/resign|left|inactive/i.test(r['active status']||'');
-      p.courses=cols.filter(c=>/^(not started|learning|in progress)$/i.test(String(r[c]).trim())).map(c=>c.replace(/_OI$/,'').replace(/_/g,' '));});
+      cols.filter(c=>/^(not started|learning|in progress)$/i.test(String(r[c]).trim())).forEach(c=>{const n=pretty(c);if(!p.courses.includes(n))p.courses.push(n)});});
     return 'Course Pending';}
   if(h.includes('quick knowledge-in')||(h.includes('incentive')&&h.includes('emi offers'))){
     const cols=[['incentive','Incentive'],['quick knowledge-in','Quick Knowledge'],['emi offers','EMI Offers']].filter(c=>h.includes(c[0]));
